@@ -266,7 +266,7 @@ gcloud projects add-iam-policy-binding playground \
 gcloud container fleet multi-cluster-services describe --project=playground
     
 
-gcloud container fleet ingress enable --config-membership=projects/308852856688/locations/us-central1/memberships/gke-cluster-1  --project=playground
+gcloud container fleet ingress enable --config-membership=projects/308852856681/locations/us-central1/memberships/gke-cluster-1  --project=playground
 
 gcloud projects add-iam-policy-binding 308852856681 \
     --member "serviceAccount:service-308852856681@gcp-sa-multiclusteringress.iam.gserviceaccount.com" \
