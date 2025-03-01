@@ -2,12 +2,6 @@
 gcloud compute networks create gke1 --subnet-mode=auto
 gcloud compute networks create gke2 --subnet-mode=auto
 
-gcloud artifacts repositories create app-mod-repo \
-      --repository-format=docker \
-      --location=us-east4 \
-      --description="AR for Cloud Run"
-
-
 # Create IAM and the needed infrastructure (GKE, Bucket, Artifact Registry)
 # Create an IAM Service Account for cluster 1
 gcloud iam service-accounts create ${CLUSTER_SA} --display-name="SA for ${CLUSTER_NAME1}"
@@ -33,6 +27,12 @@ CLUSTER_SA2=sa-gke2
 gcloud iam service-accounts create ${CLUSTER_SA2} --display-name="SA for ${CLUSTER_NAME2}"
 
 gcloud container clusters create ${CLUSTER_NAME2} --zone ${REGION}-b --num-nodes=4 --network=gke2 --create-subnetwork name=gke2-subnet --enable-ip-alias --addons GcsFuseCsiDriver --workload-pool=${PROJECT_ID}.svc.id.goog --no-enable-insecure-kubelet-readonly-port --service-account=${CLUSTER_SA2}@${PROJECT_ID}.iam.gserviceaccount.com
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member "serviceAccount:sa-gke1@${PROJECT_ID}.iam.gserviceaccount.com" \
+--role roles/container.defaultNodeServiceAccount
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member "serviceAccount:sa-gke2@${PROJECT_ID}.iam.gserviceaccount.com" \
+--role roles/container.defaultNodeServiceAccount
 
 gcloud container clusters get-credentials gke-cluster-1 --zone=us-east4-a
 gcloud container clusters get-credentials gke-cluster-2 --zone=europe-west-b
@@ -172,9 +172,6 @@ gcloud artifacts repositories add-iam-policy-binding \
     --role="roles/artifactregistry.reader" \
     --location=us-east4 \
     --project=playground
-
-
-gcloud projects add-iam-policy-binding $PROJECT_ID --member "serviceAccount:sa-gke2@${PROJECT_ID}.iam.gserviceaccount.com" --role roles/container.defaultNodeServiceAccount
 
  # register pipeline with Cloud Deploy service
 gcloud deploy apply --file clouddeploy.yaml --region=us-east4 --project playground
