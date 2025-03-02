@@ -224,7 +224,10 @@ gcloud container fleet memberships register gke-cluster-1 \
    --enable-workload-identity \
    --project playground
 
-
+gcloud container fleet memberships register gke-cluster-2 \
+   --gke-cluster us-central1-f/gke-cluster-2 \
+   --enable-workload-identity \
+   --project playground
 
 gcloud projects add-iam-policy-binding playground \
     --member "serviceAccount:playground.svc.id.goog[gke-mcs/gke-mcs-importer]" \
@@ -236,7 +239,7 @@ gcloud projects add-iam-policy-binding playground \
 gcloud container clusters update gke-cluster-2 \
     --location=europe-west1-d \
     --gateway-api=standard
-    
+
 
 gcloud services enable \
   trafficdirector.googleapis.com \
@@ -251,25 +254,24 @@ gcloud container clusters update gke-cluster-1 \
 gcloud container clusters update gke-cluster-2 \
     --location=europe-west1-d \
     --gateway-api=standard
-   
+
 gcloud container fleet multi-cluster-services enable \
     --project playground
-    
+
 gcloud projects add-iam-policy-binding playground \
     --member "serviceAccount:playground.svc.id.goog[gke-mcs/gke-mcs-importer]" \
     --role "roles/compute.networkViewer" \
     --project=playground
-    
+
 gcloud container fleet multi-cluster-services describe --project=playground
-    
+
 
 gcloud container fleet ingress enable --config-membership=projects/308852856681/locations/us-central1/memberships/gke-cluster-1  --project=playground
 
 gcloud projects add-iam-policy-binding 308852856681 \
     --member "serviceAccount:service-308852856681@gcp-sa-multiclusteringress.iam.gserviceaccount.com" \
     --role "roles/container.admin" \
-    --project=308852856681
-    
+    --project=playground
 
 gcloud container fleet ingress describe --project=playground
 
@@ -277,8 +279,7 @@ gcloud container fleet ingress describe --project=playground
 kubectl get gatewayclasses --context=gke-cluster-1
 ### Leverage multi-cluster services 
 
-Expose and export the applications by deploying Services and ServiceExports to each cluster.
-
+### Expose and export the applications by deploying Services and ServiceExports to each cluster.
 
 cat << EOF | kubectl apply --context gke-cluster-1 -f -
 apiVersion: v1
@@ -362,8 +363,7 @@ kubectl get serviceexports --context gke-cluster-2 --namespace store
 kubectl get serviceimports --context gke-cluster-1 --namespace store
 kubectl get serviceimports --context gke-cluster-2 --namespace store
 
-Deploy the Gateway named external-http and HTTPRoute on the gke-cluster-1 cluster to control traffic across the two GKE clusters using path-based routing.
-
+# Deploy the Gateway named external-http and HTTPRoute on the gke-cluster-1 cluster to control traffic across the two GKE clusters using path-based routing.
 
 cat << EOF | kubectl apply --context gke-cluster-1 -f -
 kind: Gateway
@@ -429,7 +429,46 @@ spec:
 EOF
 
 
+cat << EOF | kubectl apply --context gke-cluster-2 -f -
+kind: HTTPRoute
+apiVersion: gateway.networking.k8s.io/v1beta1
+metadata:
+  name: external-http
+  namespace: store
+  labels:
+    gateway: external-http
+spec:
+  hostnames:
+  - "store.example.com"
+  parentRefs:
+  - name: external-http
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /region-1
+    backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: store-west-1
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /region-2
+    backendRefs:
+      - group: net.gke.io
+        kind: ServiceImport
+        name: store-east-1
+        port: 8080
+  - backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: store
+      port: 8080
+EOF
+
+
 kubectl describe gateways.gateway.networking.k8s.io external-http --context gke-cluster-1 --namespace store
 
 kubectl get gateways.gateway.networking.k8s.io external-http -o=jsonpath="{.status.addresses[0].value}" --context gke-cluster-1 --namespace store
-    
