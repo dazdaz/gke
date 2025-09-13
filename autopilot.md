@@ -1,4 +1,4 @@
-## Use auopilot mode in GKE Standard - Run any Compute Class in Autopilot mode
+## Use Auopilot mode in GKE Standard clusters - Run any Compute Class in Autopilot mode
 Regular Compute Class
 ```yaml
 kind: Pod
@@ -12,7 +12,7 @@ spec:
       cloud.google.com/compute-class: autopilot
 ```
 
-## Use auopilot mode in GKE Standard - Run any Compute Class in Autopilot mode
+## Use Auopilot mode in GKE Standard clusters - Run any Compute Class in Autopilot mode
 ```yaml
 apiVersion: cloud.google.com/v1
 kind: ComputeClass
@@ -27,7 +27,7 @@ spec:
     optimizeRulePriority: true
 ```
 
-## Using autopilot mode i GKE Standard config with exec probe timeouts configured
+## Using Autopilot mode in GKE Standard clusters - Configured with exec probe timeouts
 ```yaml
 kind: Pod
 metadata:
