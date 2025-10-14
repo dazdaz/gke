@@ -1,0 +1,474 @@
+
+gcloud compute networks create gke1 --subnet-mode=auto
+gcloud compute networks create gke2 --subnet-mode=auto
+
+# Create IAM and the needed infrastructure (GKE, Bucket, Artifact Registry)
+# Create an IAM Service Account for cluster 1
+gcloud iam service-accounts create ${CLUSTER_SA} --display-name="SA for ${CLUSTER_NAME1}"
+
+export PROJECT_ID=${DEVSHELL_PROJECT_ID}
+gcloud projects add-iam-policy-binding ${DEVSHELL_PROJECT_ID} --member "serviceAccount:${CLUSTER_SA1}@${DEVSHELL_PROJECT_ID}.iam.gserviceaccount.com" --role roles/container.defaultNodeServiceAccount
+
+# Create first GKE cluster
+PROJECT_ID=playground
+CLUSTER_NAME1=gke-cluster-1
+REGION=us-east4
+CLUSTER_SA1=sa-gke1
+gcloud iam service-accounts create ${CLUSTER_SA1} --display-name="SA for ${CLUSTER_NAME}"
+gcloud container clusters create ${CLUSTER_NAME1} --zone ${REGION}-a --num-nodes=1 --network=gke1 --create-subnetwork name=gke1-subnet --enable-ip-alias --addons GcsFuseCsiDriver --workload-pool=${PROJECT_ID}.svc.id.goog --no-enable-insecure-kubelet-readonly-port --service-account=${CLUSTER_SA1}@${PROJECT_ID}.iam.gserviceaccount.com
+
+# Create second GKE cluster
+PROJECT_ID=playground
+CLUSTER_NAME2=gke-cluster-2
+REGION=europe-west4
+PROJECT_ID=playground
+CLUSTER_SA2=sa-gke2
+# Create an IAM Service Account for cluster 1
+gcloud iam service-accounts create ${CLUSTER_SA2} --display-name="SA for ${CLUSTER_NAME2}"
+
+gcloud container clusters create ${CLUSTER_NAME2} --zone ${REGION}-b --num-nodes=4 --network=gke2 --create-subnetwork name=gke2-subnet --enable-ip-alias --addons GcsFuseCsiDriver --workload-pool=${PROJECT_ID}.svc.id.goog --no-enable-insecure-kubelet-readonly-port --service-account=${CLUSTER_SA2}@${PROJECT_ID}.iam.gserviceaccount.com
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member "serviceAccount:sa-gke1@${PROJECT_ID}.iam.gserviceaccount.com" \
+--role roles/container.defaultNodeServiceAccount
+
+gcloud projects add-iam-policy-binding $PROJECT_ID --member "serviceAccount:sa-gke2@${PROJECT_ID}.iam.gserviceaccount.com" \
+--role roles/container.defaultNodeServiceAccount
+
+gcloud container clusters get-credentials gke-cluster-1 --zone=us-east4-a
+gcloud container clusters get-credentials gke-cluster-2 --zone=europe-west-b
+kubectl config get-contexts
+kubectl config rename-context gke_playground_europe-west1-gke-cluster-1 gke-cluster-1 
+.....same for gke-cluster-2
+kubectl --context gke-cluster-1 get pods
+kubectl --context gke-cluster-2 get pods
+
+gcloud artifacts repositories create app-mod-repo \
+      --repository-format=docker \
+      --location=us-east4 \
+      --description="AR for Cloud Run"
+
+git clone https://github.com/GoogleCloudPlatform/kubernetes-engine-samples
+
+cd kubernetes-engine-samples/quickstarts/whereami
+
+mv cloudbuild.yaml cloudbuild.yaml.orig
+
+gcloud builds submit --region=global
+
+mkdir clouddeploy
+cd clouddeploy
+
+
+touch skaffold.yaml 
+
+apiVersion: skaffold/v4beta7
+kind: Config
+manifests:
+  rawYaml:
+  - k8s-*
+deploy:
+  kubectl: {}
+
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: store
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store
+  namespace: store
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: store
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: store
+        version: v1
+    spec:
+      containers:
+      - name: whereami
+        image: us-east4-docker.pkg.dev/playground/app-mod-repo/whereami:latest
+        ports:
+          - containerPort: 8080
+
+
+
+pipeline.yaml
+
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: gke-pipeline
+description: main application pipeline
+serialPipeline:
+  stages:
+  - targetId: gke-cluster-1
+    profiles: []
+  - targetId: gke-cluster-2
+    profiles: []
+---
+
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+  name: gke-cluster-1
+description: gke-cluster-1
+gke:
+  cluster: projects/playground/locations/us-east4-a/clusters/gke-cluster-1
+---
+
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+  name: gke-cluster-2
+description: gke-cluster-2
+gke:
+  cluster: projects/playground/locations/europe-west4-b/clusters/gke-cluster-2
+
+
+# Add the clouddeploy.jobRunner role:
+gcloud projects add-iam-policy-binding playground \
+    --member=serviceAccount:$(gcloud projects describe playground \
+    --format="value(projectNumber)")-compute@developer.gserviceaccount.com \
+    --role="roles/clouddeploy.jobRunner"
+
+# Add the Kubernetes developer permissions:
+gcloud projects add-iam-policy-binding playground \
+    --member=serviceAccount:$(gcloud projects describe playground \
+    --format="value(projectNumber)")-compute@developer.gserviceaccount.com \
+    --role="roles/container.developer"
+
+# Add the iam.serviceAccountUser role, which includes the actAspermission to deploy to the runtime:
+gcloud iam service-accounts add-iam-policy-binding $(gcloud projects describe playground \
+    --format="value(projectNumber)")-compute@developer.gserviceaccount.com \
+    --member=serviceAccount:$(gcloud projects describe playground \
+    --format="value(projectNumber)")-compute@developer.gserviceaccount.com \
+    --role="roles/iam.serviceAccountUser" \
+    --project=playground
+
+gcloud iam service-accounts add-iam-policy-binding $(gcloud projects describe PROJECT_ID \
+    --format="value(projectNumber)")-compute@developer.gserviceaccount.com \
+    --member=serviceAccount:$(gcloud projects describe PROJECT_ID \
+    --format="value(projectNumber)")-compute@developer.gserviceaccount.com \
+    --role="roles/iam.serviceAccountUser" \
+    --project=PROJECT_ID
+
+gcloud artifacts repositories add-iam-policy-binding \
+    app-mod-repo \
+    --member=serviceAccount:sa-gke1@playground.iam.gserviceaccount.com \
+    --role=roles/artifactregistry.reader \
+    --location=us-east4 \
+    --project=playground # Add this if it's not the default project
+
+gcloud artifacts repositories add-iam-policy-binding \
+    app-mod-repo \
+    --member="serviceAccount:sa-gke2@playground.iam.gserviceaccount.com" \
+    --role="roles/artifactregistry.reader" \
+    --location=us-east4 \
+    --project=playground
+
+ # register pipeline with Cloud Deploy service
+gcloud deploy apply --file clouddeploy.yaml --region=us-east4 --project playground
+
+gcloud deploy releases create test-release-001 \
+--project playground \
+--region=us-east4 \
+--delivery-pipeline=gke-pipeline \
+--images=whereami=us-east4-docker.pkg.dev/playground/app-mod-repo/whereami:latest
+
+
+# Deploy test-release-001 to first target
+gcloud beta deploy releases promote --release=test-release-001 --delivery-pipeline=gke-pipeline --region=us-east4 --project=playground --to-target=gke-cluster-1
+# kubectl --context gke-cluster-1 get pods -n store
+
+# Deploy test-release-001 to second target
+gcloud beta deploy releases promote --release=test-release-001 --delivery-pipeline=gke-pipeline --region=us-east4 --project=playground --to-target=gke-cluster-2
+# kubectl --context gke-cluster-2 get pods -n store
+
+
+
+### Enable multi-cluster services.
+
+gcloud services enable \
+    multiclusterservicediscovery.googleapis.com \
+    gkehub.googleapis.com \
+    cloudresourcemanager.googleapis.com \
+    trafficdirector.googleapis.com \
+    dns.googleapis.com \
+    --project=playground
+    
+    gcloud container fleet multi-cluster-services enable \
+    --project playground
+    
+    
+gcloud container clusters update gke-cluster-1 --zone=us-central1-f --enable-fleet
+gcloud container clusters update gke-cluster-2 --zone=europe-west1-d --enable-fleet
+
+# ENABLE WORLOAD IDENTITY ON CLUSTERS 
+gcloud container clusters update gke-cluster-1 \
+    --zone=us-central1-f \
+    --workload-pool=playground.svc.id.goog
+
+gcloud container clusters update gke-cluster-2 \
+    --zone=us-west1-a \
+    --workload-pool=playground.svc.id.goog
+
+gcloud container fleet memberships register gke-cluster-1 \
+   --gke-cluster us-central1-f/gke-cluster-1 \
+   --enable-workload-identity \
+   --project playground
+
+gcloud container fleet memberships register gke-cluster-2 \
+   --gke-cluster us-central1-f/gke-cluster-2 \
+   --enable-workload-identity \
+   --project playground
+
+gcloud projects add-iam-policy-binding playground \
+    --member "serviceAccount:playground.svc.id.goog[gke-mcs/gke-mcs-importer]" \
+    --role "roles/compute.networkViewer"
+
+
+### Enable the multi-cluster gateway controller.
+
+gcloud container clusters update gke-cluster-2 \
+    --location=europe-west1-d \
+    --gateway-api=standard
+
+
+gcloud services enable \
+  trafficdirector.googleapis.com \
+  multiclusterservicediscovery.googleapis.com \
+  multiclusteringress.googleapis.com \
+  --project=playground
+
+gcloud container clusters update gke-cluster-1 \
+    --location=us-central1-f \
+    --gateway-api=standard
+
+gcloud container clusters update gke-cluster-2 \
+    --location=europe-west1-d \
+    --gateway-api=standard
+
+gcloud container fleet multi-cluster-services enable \
+    --project playground
+
+gcloud projects add-iam-policy-binding playground \
+    --member "serviceAccount:playground.svc.id.goog[gke-mcs/gke-mcs-importer]" \
+    --role "roles/compute.networkViewer" \
+    --project=playground
+
+gcloud container fleet multi-cluster-services describe --project=playground
+
+
+gcloud container fleet ingress enable --config-membership=projects/308852856681/locations/us-central1/memberships/gke-cluster-1  --project=playground
+
+gcloud projects add-iam-policy-binding 308852856681 \
+    --member "serviceAccount:service-308852856681@gcp-sa-multiclusteringress.iam.gserviceaccount.com" \
+    --role "roles/container.admin" \
+    --project=playground
+
+gcloud container fleet ingress describe --project=playground
+
+
+kubectl get gatewayclasses --context=gke-cluster-1
+### Leverage multi-cluster services 
+
+### Expose and export the applications by deploying Services and ServiceExports to each cluster.
+
+cat << EOF | kubectl apply --context gke-cluster-1 -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: store
+  namespace: store
+spec:
+  selector:
+    app: store
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+kind: ServiceExport
+apiVersion: net.gke.io/v1
+metadata:
+  name: store
+  namespace: store
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-west-1
+  namespace: store
+spec:
+  selector:
+    app: store
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+kind: ServiceExport
+apiVersion: net.gke.io/v1
+metadata:
+  name: store-west-1
+  namespace: store
+EOF
+
+cat << EOF | kubectl apply --context gke-cluster-2 -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: store
+  namespace: store
+spec:
+  selector:
+    app: store
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+kind: ServiceExport
+apiVersion: net.gke.io/v1
+metadata:
+  name: store
+  namespace: store
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-east-1
+  namespace: store
+spec:
+  selector:
+    app: store
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+kind: ServiceExport
+apiVersion: net.gke.io/v1
+metadata:
+  name: store-east-1
+  namespace: store
+EOF
+
+kubectl get serviceexports --context gke-cluster-1 --namespace store
+kubectl get serviceexports --context gke-cluster-2 --namespace store
+
+kubectl get serviceimports --context gke-cluster-1 --namespace store
+kubectl get serviceimports --context gke-cluster-2 --namespace store
+
+# Deploy the Gateway named external-http and HTTPRoute on the gke-cluster-1 cluster to control traffic across the two GKE clusters using path-based routing.
+
+cat << EOF | kubectl apply --context gke-cluster-1 -f -
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1beta1
+metadata:
+  name: external-http
+  namespace: store
+spec:
+  gatewayClassName: gke-l7-global-external-managed-mc
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      kinds:
+      - kind: HTTPRoute
+EOF
+
+Requests to /region-1 are routed to store Pods in the gke-cluster-1 cluster.
+Requests to /region-2 are routed to store Pods in the gke-cluster-2 cluster.
+Requests to any other path are routed to either cluster, according to its health, capacity, and proximity to the requesting client.
+
+
+# For the QwikLabs to pass this, you need to remove the hostnames: - "store.example.com" but in real life you'd use this
+
+cat << EOF | kubectl apply --context gke-cluster-1 -f -
+kind: HTTPRoute
+apiVersion: gateway.networking.k8s.io/v1beta1
+metadata:
+  name: external-http
+  namespace: store
+  labels:
+    gateway: external-http
+spec:
+  hostnames:
+  - "store.example.com"
+  parentRefs:
+  - name: external-http
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /region-1
+    backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: store-west-1
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /region-2
+    backendRefs:
+      - group: net.gke.io
+        kind: ServiceImport
+        name: store-east-1
+        port: 8080
+  - backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: store
+      port: 8080
+EOF
+
+
+cat << EOF | kubectl apply --context gke-cluster-2 -f -
+kind: HTTPRoute
+apiVersion: gateway.networking.k8s.io/v1beta1
+metadata:
+  name: external-http
+  namespace: store
+  labels:
+    gateway: external-http
+spec:
+  hostnames:
+  - "store.example.com"
+  parentRefs:
+  - name: external-http
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /region-1
+    backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: store-west-1
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /region-2
+    backendRefs:
+      - group: net.gke.io
+        kind: ServiceImport
+        name: store-east-1
+        port: 8080
+  - backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: store
+      port: 8080
+EOF
+
+
+kubectl describe gateways.gateway.networking.k8s.io external-http --context gke-cluster-1 --namespace store
+
+kubectl get gateways.gateway.networking.k8s.io external-http -o=jsonpath="{.status.addresses[0].value}" --context gke-cluster-1 --namespace store
