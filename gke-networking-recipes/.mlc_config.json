@@ -1,0 +1,13 @@
+{
+    "ignorePatterns": [
+      {
+        "pattern": "^http://example.net"
+      },
+      {
+        "pattern": "^https://docs.github.com"
+      },
+      {
+        "pattern": "^vendor"  
+      }
+    ]
+}

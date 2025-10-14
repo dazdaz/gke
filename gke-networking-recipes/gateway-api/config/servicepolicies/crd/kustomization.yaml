@@ -1,0 +1,3 @@
+resources:
+- standard/healthcheckpolicy.yaml
+- standard/lbpolicy.yaml
