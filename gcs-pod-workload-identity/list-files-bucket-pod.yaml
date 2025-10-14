@@ -1,0 +1,19 @@
+# list-files-bucket-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gcs-lister-pod
+spec:
+  serviceAccountName: k8s_service_account
+  restartPolicy: Never
+  containers:
+  - name: gcs-lister
+    image: europe-west4-docker.pkg.dev/myproject/myrepo/list-files-bucket:latest
+    command: ["python"]
+    args: ["/app/list-files-bucket.py"]
+    # Pass the service account's name to the container as an environment variable using the Kubernetes Downward API
+    env:
+    - name: KUBERNETES_SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName

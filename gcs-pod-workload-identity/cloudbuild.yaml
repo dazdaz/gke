@@ -1,0 +1,62 @@
+# Cloud Build configuration to build, push, and deploy/run your GKE FFmpeg transcoder.
+
+# Define variables as default substitutions.
+# These can be overridden using --substitutions=_VAR_NAME=new_value during gcloud builds submit.
+substitutions:
+  _IMAGE_NAME: 'list-files-bucket'
+  _PROJECT_ID: 'myproject' # Your GCP project ID
+  _REGION: 'europe-west4'          # Region where your GKE cluster is
+  _GKE_CLUSTER: 'mycluster'               # Your GKE cluster name
+  _REPO: 'myrepo'           # Artifact Registry repo
+  # _GKE_ZONE: 'europe-west4-a'      # REMOVED: No longer used in the steps
+
+steps:
+# 1. Build the Docker image
+- id: 'Build Docker Image'
+  name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - '$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPO/$_IMAGE_NAME:latest' # Artifact Registry path
+  - '.' # Build context is current directory
+  waitFor: ['-'] # Start immediately
+
+# 2. Push the Docker image to Artifact Registry
+- id: 'Push Docker Image'
+  name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'push'
+  - '$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPO/$_IMAGE_NAME:latest'
+  waitFor: ['Build Docker Image']
+
+# 3. Get GKE Credentials (Required for kubectl and your script to interact with GKE)
+- id: 'Get GKE Credentials'
+  name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    # Use --zone if your cluster is zonal, or --region if it's regional with no explicit zone.
+    # The current definition uses --region; if you need --zone, adjust here.
+    gcloud container clusters get-credentials $_GKE_CLUSTER --region=$_REGION --project=$_PROJECT_ID
+  waitFor: ['Push Docker Image']
+
+#    Adjust the command and arguments based on how you want to trigger your transcoder.
+#    The image here needs Python to be the ENTRYPOINT or explicitly called.
+- id: 'Run Transcoding Test'
+  name: '$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPO/$_IMAGE_NAME:latest'
+  entrypoint: 'python3' # Explicitly call python3
+  args:
+  - 'list-files-bucket.py'
+  # Example arguments for your script:
+  - '--gcs-input-bucket'
+  - 'transcode-preprocessing-bucket'
+  env:
+    # Ensure kubectl is in the PATH for your Python script's subprocess calls
+    # This is often handled by the base image, but can be added explicitly if needed.
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  waitFor: ['Get GKE Credentials']
+
+# Define the images to be pushed as part of the build artifacts
+images:
+- '$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPO/$_IMAGE_NAME:latest'
