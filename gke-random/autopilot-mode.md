@@ -67,3 +67,4 @@ spec:
 * https://cloud.google.com/kubernetes-engine/docs/how-to/autopilot-classes-standard-clusters
 * https://medium.com/google-cloud/prepare-your-gke-workloads-for-stricter-exec-probe-timeouts-in-gke-1-35-078a7913ba56
 * https://github.com/robusta-dev/krr Kubernetes Resource Recommendations Based on Historical Data
+* https://docs.cloud.google.com/kubernetes-engine/docs/how-to/autopilot-gpus
