@@ -1,0 +1,58 @@
+# Gatekeeper Constraints: Require Labels
+# These constraints use the K8sRequiredLabels and K8sRequiredLabelsDeployment templates
+
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: require-pod-labels
+  annotations:
+    description: "Requires all Pods to have app.kubernetes.io labels"
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    message: "Pods must have required labels for proper resource management"
+    labels:
+      - key: app.kubernetes.io/name
+        allowedRegex: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+      - key: app.kubernetes.io/version
+        allowedRegex: "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+      - key: app.kubernetes.io/managed-by
+        allowedRegex: ".*"
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabelsDeployment
+metadata:
+  name: require-deployment-labels
+  annotations:
+    description: "Requires all Deployments to have app.kubernetes.io labels"
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    message: "Deployments must have required labels on both metadata and pod template"
+    labels:
+      - key: app.kubernetes.io/name
+      - key: app.kubernetes.io/version
+      - key: app.kubernetes.io/managed-by

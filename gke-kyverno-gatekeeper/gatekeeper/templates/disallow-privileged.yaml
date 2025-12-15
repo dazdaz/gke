@@ -1,0 +1,249 @@
+# Gatekeeper ConstraintTemplate: Disallow Privileged Containers
+# This template defines the Rego policy for blocking privileged containers
+
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8spspprivilegedcontainer
+  annotations:
+    metadata.gatekeeper.sh/title: "Privileged Container"
+    metadata.gatekeeper.sh/version: 1.0.1
+    description: >-
+      Controls the ability of any container to enable privileged mode.
+      Corresponds to the `privileged` field in a PodSecurityPolicy.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sPSPPrivilegedContainer
+      validation:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            Controls the ability of any container to enable privileged mode.
+          properties:
+            exemptImages:
+              description: >-
+                Any container that uses an image that matches an entry in this list
+                will be excluded from enforcement.
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8spsprivilegedcontainer
+
+        import future.keywords.in
+
+        violation[{"msg": msg, "details": {}}] {
+            c := input_containers[_]
+            not is_exempt(c)
+            c.securityContext.privileged == true
+            msg := sprintf("Privileged container is not allowed: %v, securityContext: %v", [c.name, c.securityContext])
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.initContainers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.ephemeralContainers[_]
+        }
+
+        is_exempt(container) {
+            exempt_images := object.get(input, ["parameters", "exemptImages"], [])
+            img := container.image
+            exemption := exempt_images[_]
+            _matches_exemption(img, exemption)
+        }
+
+        _matches_exemption(img, exemption) {
+            not endswith(exemption, "*")
+            exemption == img
+        }
+
+        _matches_exemption(img, exemption) {
+            endswith(exemption, "*")
+            prefix := trim_suffix(exemption, "*")
+            startswith(img, prefix)
+        }
+
+---
+# ConstraintTemplate for disallowing privilege escalation
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8spspallowprivilegeescalationcontainer
+  annotations:
+    metadata.gatekeeper.sh/title: "Allow Privilege Escalation Container"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Controls restricting escalation to root privileges.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sPSPAllowPrivilegeEscalationContainer
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            exemptImages:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8spspallowprivilegeescalationcontainer
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+            c := input_containers[_]
+            not is_exempt(c)
+            input_allow_privilege_escalation(c)
+            msg := sprintf("Privilege escalation container is not allowed: %v", [c.name])
+        }
+
+        input_allow_privilege_escalation(c) {
+            not has_field(c, "securityContext")
+        }
+
+        input_allow_privilege_escalation(c) {
+            not c.securityContext.allowPrivilegeEscalation == false
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.initContainers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.ephemeralContainers[_]
+        }
+
+        has_field(object, field) {
+            object[field]
+        }
+
+        is_exempt(container) {
+            exempt_images := object.get(input, ["parameters", "exemptImages"], [])
+            img := container.image
+            exemption := exempt_images[_]
+            _matches_exemption(img, exemption)
+        }
+
+        _matches_exemption(img, exemption) {
+            not endswith(exemption, "*")
+            exemption == img
+        }
+
+        _matches_exemption(img, exemption) {
+            endswith(exemption, "*")
+            prefix := trim_suffix(exemption, "*")
+            startswith(img, prefix)
+        }
+
+---
+# ConstraintTemplate for requiring non-root user
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8spsprunasnonroot
+  annotations:
+    metadata.gatekeeper.sh/title: "Run As Non-Root"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Requires containers to run as non-root user.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sPSPRunAsNonRoot
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            exemptImages:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8spsprunasnonroot
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+            not input_share_pidnamespace
+            c := input_containers[_]
+            not is_exempt(c)
+            not run_as_non_root(c)
+            msg := sprintf("Container %v must run as non-root user. Set runAsNonRoot: true in securityContext.", [c.name])
+        }
+
+        run_as_non_root(c) {
+            c.securityContext.runAsNonRoot == true
+        }
+
+        run_as_non_root(c) {
+            not has_field(c.securityContext, "runAsNonRoot")
+            input.review.object.spec.securityContext.runAsNonRoot == true
+        }
+
+        run_as_non_root(c) {
+            c.securityContext.runAsUser > 0
+        }
+
+        run_as_non_root(c) {
+            not has_field(c.securityContext, "runAsUser")
+            input.review.object.spec.securityContext.runAsUser > 0
+        }
+
+        input_share_pidnamespace {
+            input.review.object.spec.shareProcessNamespace == true
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.initContainers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.ephemeralContainers[_]
+        }
+
+        has_field(object, field) {
+            object[field]
+        }
+
+        is_exempt(container) {
+            exempt_images := object.get(input, ["parameters", "exemptImages"], [])
+            img := container.image
+            exemption := exempt_images[_]
+            _matches_exemption(img, exemption)
+        }
+
+        _matches_exemption(img, exemption) {
+            not endswith(exemption, "*")
+            exemption == img
+        }
+
+        _matches_exemption(img, exemption) {
+            endswith(exemption, "*")
+            prefix := trim_suffix(exemption, "*")
+            startswith(img, prefix)
+        }

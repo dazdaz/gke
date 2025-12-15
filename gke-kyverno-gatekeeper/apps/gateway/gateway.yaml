@@ -1,0 +1,71 @@
+# Gateway Configuration for Demo Applications
+# Uses Gateway API with SSL/TLS termination
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: apps-gateway
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: apps-gateway
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+  annotations:
+    description: "Gateway for demo applications with TLS support"
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    # HTTP listener (redirects to HTTPS)
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+        kinds:
+          - kind: HTTPRoute
+    
+    # HTTPS listener with TLS termination
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: apps-tls-secret
+            namespace: apps
+      allowedRoutes:
+        namespaces:
+          from: Same
+        kinds:
+          - kind: HTTPRoute
+
+---
+# Note: TLS secret (apps-tls-secret) is created dynamically by the Makefile
+# to avoid malformed certificate warnings from static base64 values
+
+---
+# HTTP to HTTPS redirect
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https-redirect
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: http-redirect
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+spec:
+  parentRefs:
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

@@ -1,0 +1,249 @@
+# Non-Compliant Application Deployment
+# This application violates multiple Kyverno and Gatekeeper policies
+# Use this to demonstrate policy enforcement
+
+# WARNING: This file is intentionally non-compliant!
+# It will be rejected by both Kyverno and Gatekeeper when policies are enforced.
+
+---
+# Non-compliant Pod - Missing Labels
+apiVersion: v1
+kind: Pod
+metadata:
+  name: missing-labels-pod
+  namespace: apps
+  # Missing required labels: app.kubernetes.io/name, app.kubernetes.io/version, app.kubernetes.io/managed-by
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25.3
+      ports:
+        - containerPort: 80
+
+---
+# Non-compliant Pod - Privileged Container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: privileged-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25.3
+      ports:
+        - containerPort: 80
+      # VIOLATION: Privileged container
+      securityContext:
+        privileged: true
+
+---
+# Non-compliant Pod - Allows Privilege Escalation
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privilege-escalation-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: privilege-escalation-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25.3
+      ports:
+        - containerPort: 80
+      # VIOLATION: Allows privilege escalation
+      securityContext:
+        allowPrivilegeEscalation: true
+
+---
+# Non-compliant Pod - Running as Root
+apiVersion: v1
+kind: Pod
+metadata:
+  name: root-user-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: root-user-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  # VIOLATION: Running as root
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
+  containers:
+    - name: nginx
+      image: nginx:1.25.3
+      ports:
+        - containerPort: 80
+
+---
+# Non-compliant Pod - Missing Health Probes
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-probes-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: no-probes-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+    - name: nginx
+      image: nginx:1.25.3
+      ports:
+        - containerPort: 80
+      securityContext:
+        allowPrivilegeEscalation: false
+      # VIOLATION: Missing livenessProbe and readinessProbe
+
+---
+# Non-compliant Pod - Using Latest Tag
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latest-tag-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: latest-tag-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+    - name: nginx
+      # VIOLATION: Using 'latest' tag
+      image: nginx:latest
+      ports:
+        - containerPort: 80
+      securityContext:
+        allowPrivilegeEscalation: false
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 5
+        periodSeconds: 5
+
+---
+# Non-compliant Pod - No Image Tag
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-tag-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: no-tag-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+    - name: nginx
+      # VIOLATION: No tag specified (defaults to latest)
+      image: nginx
+      ports:
+        - containerPort: 80
+      securityContext:
+        allowPrivilegeEscalation: false
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 5
+        periodSeconds: 5
+
+---
+# Non-compliant Pod - Untrusted Registry
+apiVersion: v1
+kind: Pod
+metadata:
+  name: untrusted-registry-pod
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: untrusted-registry-pod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+    - name: app
+      # VIOLATION: Using untrusted registry
+      image: malicious-registry.com/evil-image:1.0.0
+      ports:
+        - containerPort: 80
+      securityContext:
+        allowPrivilegeEscalation: false
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 5
+        periodSeconds: 5
+
+---
+# Non-compliant Deployment - Multiple Violations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-violation-deployment
+  namespace: apps
+  # VIOLATION: Missing required labels on Deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-app
+  template:
+    metadata:
+      labels:
+        app: bad-app
+        # VIOLATION: Missing required labels on Pod template
+    spec:
+      # VIOLATION: No security context - runs as root by default
+      containers:
+        - name: nginx
+          # VIOLATION: Using latest tag
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          # VIOLATION: Privileged container
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+          # VIOLATION: No health probes

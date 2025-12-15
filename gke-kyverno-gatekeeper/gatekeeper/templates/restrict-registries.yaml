@@ -1,0 +1,220 @@
+# Gatekeeper ConstraintTemplate: Restrict Container Registries
+# This template defines the Rego policy for restricting container image registries
+
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sallowedrepos
+  annotations:
+    metadata.gatekeeper.sh/title: "Allowed Repositories"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Requires container images to come from allowed repositories.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sAllowedRepos
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            repos:
+              description: The list of allowed image repository prefixes
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sallowedrepos
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+            container := input_containers[_]
+            not image_matches_allowed(container.image)
+            msg := sprintf("Container <%v> has an invalid image repo <%v>. Allowed repos are: %v", [container.name, container.image, input.parameters.repos])
+        }
+
+        image_matches_allowed(image) {
+            allowed := input.parameters.repos[_]
+            startswith(image, allowed)
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.initContainers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.ephemeralContainers[_]
+        }
+
+---
+# ConstraintTemplate for disallowing latest tag
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sdisallowedtags
+  annotations:
+    metadata.gatekeeper.sh/title: "Disallowed Tags"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Requires container images to have a tag different from those specified.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDisallowedTags
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            tags:
+              description: "Disallowed container image tags"
+              type: array
+              items:
+                type: string
+            exemptImages:
+              description: "Images exempt from this policy"
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdisallowedtags
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+            container := input_containers[_]
+            not is_exempt(container.image)
+            tag := get_tag(container.image)
+            tag_is_disallowed(tag)
+            msg := sprintf("Container <%v> uses disallowed tag <%v>. Disallowed tags are: %v", [container.name, tag, input.parameters.tags])
+        }
+
+        violation[{"msg": msg}] {
+            container := input_containers[_]
+            not is_exempt(container.image)
+            not contains(container.image, ":")
+            not contains(container.image, "@")
+            msg := sprintf("Container <%v> has no tag specified. Images without tags default to 'latest' which is disallowed.", [container.name])
+        }
+
+        get_tag(image) = tag {
+            contains(image, ":")
+            not contains(image, "@")
+            parts := split(image, ":")
+            tag := parts[count(parts) - 1]
+        }
+
+        get_tag(image) = "none" {
+            contains(image, "@")
+        }
+
+        tag_is_disallowed(tag) {
+            disallowed := input.parameters.tags[_]
+            tag == disallowed
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.initContainers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.ephemeralContainers[_]
+        }
+
+        is_exempt(image) {
+            exempt_images := object.get(input.parameters, "exemptImages", [])
+            exemption := exempt_images[_]
+            _matches_exemption(image, exemption)
+        }
+
+        _matches_exemption(image, exemption) {
+            not endswith(exemption, "*")
+            exemption == image
+        }
+
+        _matches_exemption(image, exemption) {
+            endswith(exemption, "*")
+            prefix := trim_suffix(exemption, "*")
+            startswith(image, prefix)
+        }
+
+---
+# ConstraintTemplate for requiring image digest
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredigest
+  annotations:
+    metadata.gatekeeper.sh/title: "Require Image Digest"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Requires container images to use digest (sha256) instead of tags.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireDigest
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            exemptImages:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredigest
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+            container := input_containers[_]
+            not is_exempt(container.image)
+            not contains(container.image, "@sha256:")
+            msg := sprintf("Container <%v> image <%v> must use digest (@sha256:...) instead of tag for better reproducibility", [container.name, container.image])
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.initContainers[_]
+        }
+
+        input_containers[c] {
+            c := input.review.object.spec.ephemeralContainers[_]
+        }
+
+        is_exempt(image) {
+            exempt_images := object.get(input.parameters, "exemptImages", [])
+            exemption := exempt_images[_]
+            _matches_exemption(image, exemption)
+        }
+
+        _matches_exemption(image, exemption) {
+            not endswith(exemption, "*")
+            exemption == image
+        }
+
+        _matches_exemption(image, exemption) {
+            endswith(exemption, "*")
+            prefix := trim_suffix(exemption, "*")
+            startswith(image, prefix)
+        }

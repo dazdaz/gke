@@ -1,0 +1,83 @@
+# Gatekeeper Constraints: Restrict Container Registries
+# These constraints use the registry-related templates
+
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  name: restrict-image-registries
+  annotations:
+    description: "Restricts container images to allowed registries only"
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    repos:
+      - "gcr.io/"
+      - "us-docker.pkg.dev/"
+      - "europe-docker.pkg.dev/"
+      - "asia-docker.pkg.dev/"
+      - "docker.io/library/"
+      - "ghcr.io/"
+      - "registry.k8s.io/"
+      - "quay.io/"
+      - "nginx"
+      - "busybox"
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDisallowedTags
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    description: "Disallows the 'latest' tag on container images"
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    tags:
+      - "latest"
+    exemptImages: []
+
+---
+# Audit-only constraint for image digest
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireDigest
+metadata:
+  name: recommend-image-digest
+  annotations:
+    description: "Audits containers that don't use image digests"
+spec:
+  enforcementAction: dryrun  # Audit mode
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    exemptImages: []

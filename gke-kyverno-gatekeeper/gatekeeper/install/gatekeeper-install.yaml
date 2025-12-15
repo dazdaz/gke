@@ -1,0 +1,90 @@
+# Gatekeeper (OPA) Installation for GKE Autopilot
+# This file provides installation instructions and basic configuration
+
+# For GKE Autopilot, install Gatekeeper using the official release:
+# kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.14.0/deploy/gatekeeper.yaml
+
+# Or use Helm:
+# helm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts
+# helm install gatekeeper gatekeeper/gatekeeper -n gatekeeper-system --create-namespace
+
+---
+# Namespace for Gatekeeper
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gatekeeper-system
+  labels:
+    app.kubernetes.io/name: gatekeeper
+    app.kubernetes.io/instance: gatekeeper
+    app.kubernetes.io/part-of: policy-demo
+    admission.gatekeeper.sh/ignore: "no-self-managing"
+    control-plane: controller-manager
+    gatekeeper.sh/system: "yes"
+
+---
+# Gatekeeper Config - Define which namespaces to sync and audit
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: Config
+metadata:
+  name: config
+  namespace: gatekeeper-system
+spec:
+  sync:
+    syncOnly:
+      - group: ""
+        version: "v1"
+        kind: "Namespace"
+      - group: ""
+        version: "v1"
+        kind: "Pod"
+      - group: "apps"
+        version: "v1"
+        kind: "Deployment"
+  match:
+    - excludedNamespaces:
+        - gatekeeper-system
+        - kube-system
+        - kube-public
+        - kube-node-lease
+      processes:
+        - "*"
+  validation:
+    traces:
+      - user: "*"
+        kind:
+          group: ""
+          version: "v1"
+          kind: "Pod"
+
+---
+# Assign metadata for audit
+apiVersion: mutations.gatekeeper.sh/v1
+kind: AssignMetadata
+metadata:
+  name: add-policy-engine-label
+  namespace: gatekeeper-system
+spec:
+  match:
+    scope: Namespaced
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+  location: "metadata.labels.policy-engine"
+  parameters:
+    assign:
+      value: "gatekeeper"
+
+---
+# Note: For a complete Gatekeeper installation on GKE Autopilot, run:
+# kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.14.0/deploy/gatekeeper.yaml
+#
+# Or use Helm:
+# helm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts
+# helm install gatekeeper gatekeeper/gatekeeper -n gatekeeper-system --create-namespace \
+#   --set replicas=3 \
+#   --set auditInterval=60 \
+#   --set constraintViolationsLimit=100

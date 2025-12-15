@@ -1,0 +1,168 @@
+# Gatekeeper ConstraintTemplate: Require Health Probes
+# This template defines the Rego policy for requiring liveness and readiness probes
+
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredprobes
+  annotations:
+    metadata.gatekeeper.sh/title: "Required Probes"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Requires containers to have liveness and/or readiness probes configured.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredProbes
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            probes:
+              description: "A list of probes that are required (e.g., `livenessProbe`, `readinessProbe`)"
+              type: array
+              items:
+                type: string
+            probeTypes:
+              description: "The probe must define one of these types"
+              type: array
+              items:
+                type: string
+            excludedContainers:
+              description: "Container names to exclude from probe requirements"
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredprobes
+
+        import future.keywords.in
+
+        probe_type_set = probe_types {
+            probe_types := {type | type := input.parameters.probeTypes[_]}
+        }
+
+        violation[{"msg": msg}] {
+            container := input.review.object.spec.containers[_]
+            not is_excluded(container.name)
+            probe := input.parameters.probes[_]
+            probe_is_missing(container, probe)
+            msg := sprintf("Container <%v> in Pod <%v> is missing required probe: %v", [container.name, input.review.object.metadata.name, probe])
+        }
+
+        probe_is_missing(container, probe) = true {
+            not container[probe]
+        }
+
+        probe_is_missing(container, probe) = true {
+            probe_field_empty(container, probe)
+        }
+
+        probe_field_empty(container, probe) = true {
+            probe_obj := container[probe]
+            not probe_type_set
+            probe_obj == {}
+        }
+
+        probe_field_empty(container, probe) = true {
+            probe_obj := container[probe]
+            probe_type_set
+            not has_probe_type(probe_obj)
+        }
+
+        has_probe_type(probe_obj) {
+            probe_type_set[_] == "httpGet"
+            probe_obj.httpGet
+        }
+
+        has_probe_type(probe_obj) {
+            probe_type_set[_] == "tcpSocket"
+            probe_obj.tcpSocket
+        }
+
+        has_probe_type(probe_obj) {
+            probe_type_set[_] == "exec"
+            probe_obj.exec
+        }
+
+        has_probe_type(probe_obj) {
+            probe_type_set[_] == "grpc"
+            probe_obj.grpc
+        }
+
+        is_excluded(container_name) {
+            excluded := input.parameters.excludedContainers[_]
+            excluded == container_name
+        }
+
+---
+# ConstraintTemplate for validating probe configuration values
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sprobevalues
+  annotations:
+    metadata.gatekeeper.sh/title: "Probe Values"
+    metadata.gatekeeper.sh/version: 1.0.0
+    description: >-
+      Validates that probe configuration values are within acceptable ranges.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sProbeValues
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            minInitialDelaySeconds:
+              type: integer
+              description: "Minimum value for initialDelaySeconds"
+            maxInitialDelaySeconds:
+              type: integer
+              description: "Maximum value for initialDelaySeconds"
+            minPeriodSeconds:
+              type: integer
+              description: "Minimum value for periodSeconds"
+            maxPeriodSeconds:
+              type: integer
+              description: "Maximum value for periodSeconds"
+            minTimeoutSeconds:
+              type: integer
+              description: "Minimum value for timeoutSeconds"
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sprobevalues
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+            container := input.review.object.spec.containers[_]
+            probe := container.livenessProbe
+            probe
+            min_initial := object.get(input.parameters, "minInitialDelaySeconds", 0)
+            probe.initialDelaySeconds < min_initial
+            msg := sprintf("Container <%v> livenessProbe.initialDelaySeconds (%v) is less than minimum (%v)", [container.name, probe.initialDelaySeconds, min_initial])
+        }
+
+        violation[{"msg": msg}] {
+            container := input.review.object.spec.containers[_]
+            probe := container.livenessProbe
+            probe
+            min_period := object.get(input.parameters, "minPeriodSeconds", 0)
+            probe.periodSeconds < min_period
+            msg := sprintf("Container <%v> livenessProbe.periodSeconds (%v) is less than minimum (%v)", [container.name, probe.periodSeconds, min_period])
+        }
+
+        violation[{"msg": msg}] {
+            container := input.review.object.spec.containers[_]
+            probe := container.readinessProbe
+            probe
+            min_period := object.get(input.parameters, "minPeriodSeconds", 0)
+            probe.periodSeconds < min_period
+            msg := sprintf("Container <%v> readinessProbe.periodSeconds (%v) is less than minimum (%v)", [container.name, probe.periodSeconds, min_period])
+        }

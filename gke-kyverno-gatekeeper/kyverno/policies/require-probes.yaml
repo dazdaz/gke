@@ -1,0 +1,128 @@
+# Kyverno Policy: Require Health Probes
+# This policy ensures containers have liveness and readiness probes configured
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-probes
+  annotations:
+    policies.kyverno.io/title: Require Liveness and Readiness Probes
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Liveness and readiness probes are important for proper application lifecycle
+      management. This policy ensures that all containers have both liveness and
+      readiness probes configured.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-liveness-probe
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      preconditions:
+        all:
+          # Skip if it's a job or cronjob pod
+          - key: "{{request.object.metadata.ownerReferences[0].kind || 'Pod'}}"
+            operator: NotIn
+            value: ["Job", "CronJob"]
+      validate:
+        message: >-
+          Liveness probe is required for all containers.
+          Please add a livenessProbe configuration to your container spec.
+        pattern:
+          spec:
+            containers:
+              - livenessProbe:
+                  periodSeconds: ">0"
+
+    - name: require-readiness-probe
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      preconditions:
+        all:
+          # Skip if it's a job or cronjob pod
+          - key: "{{request.object.metadata.ownerReferences[0].kind || 'Pod'}}"
+            operator: NotIn
+            value: ["Job", "CronJob"]
+      validate:
+        message: >-
+          Readiness probe is required for all containers.
+          Please add a readinessProbe configuration to your container spec.
+        pattern:
+          spec:
+            containers:
+              - readinessProbe:
+                  periodSeconds: ">0"
+
+---
+# Policy to validate probe configuration
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: validate-probe-configuration
+  annotations:
+    policies.kyverno.io/title: Validate Probe Configuration
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy validates that probes are configured with reasonable values
+      for initialDelaySeconds, periodSeconds, and timeoutSeconds.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: validate-liveness-probe-values
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      validate:
+        message: >-
+          Liveness probe should have reasonable configuration values.
+          Recommended: initialDelaySeconds >= 10, periodSeconds >= 10, timeoutSeconds >= 1
+        pattern:
+          spec:
+            containers:
+              - =(livenessProbe):
+                  =(initialDelaySeconds): ">=5"
+                  =(periodSeconds): ">=5"
+                  =(timeoutSeconds): ">=1"
+
+    - name: validate-readiness-probe-values
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      validate:
+        message: >-
+          Readiness probe should have reasonable configuration values.
+          Recommended: periodSeconds >= 5, timeoutSeconds >= 1
+        pattern:
+          spec:
+            containers:
+              - =(readinessProbe):
+                  =(periodSeconds): ">=5"
+                  =(timeoutSeconds): ">=1"

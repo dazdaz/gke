@@ -1,0 +1,60 @@
+# Gatekeeper Constraints: Require Health Probes
+# These constraints use the K8sRequiredProbes template
+
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredProbes
+metadata:
+  name: require-liveness-readiness-probes
+  annotations:
+    description: "Requires containers to have liveness and readiness probes"
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    probes:
+      - livenessProbe
+      - readinessProbe
+    probeTypes:
+      - httpGet
+      - tcpSocket
+      - exec
+      - grpc
+    excludedContainers:
+      - istio-proxy
+      - linkerd-proxy
+
+---
+# Audit-only constraint for probe values
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sProbeValues
+metadata:
+  name: validate-probe-values
+  annotations:
+    description: "Validates probe configuration values are reasonable"
+spec:
+  enforcementAction: dryrun  # Audit mode - doesn't block, just reports
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - gatekeeper-demo
+      - apps
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    minInitialDelaySeconds: 5
+    minPeriodSeconds: 5
+    minTimeoutSeconds: 1

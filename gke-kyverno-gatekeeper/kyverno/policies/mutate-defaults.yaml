@@ -1,0 +1,161 @@
+# Kyverno Mutation Policies
+# These policies demonstrate Kyverno's mutation capabilities - a key differentiator from Gatekeeper
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-default-securitycontext
+  annotations:
+    policies.kyverno.io/title: Add Default Security Context
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy adds a default security context to Pods that don't have one defined.
+      This demonstrates Kyverno's mutation capability which automatically fixes
+      non-compliant resources rather than just rejecting them.
+spec:
+  rules:
+    - name: add-pod-security-context
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      mutate:
+        patchStrategicMerge:
+          spec:
+            securityContext:
+              +(runAsNonRoot): true
+              +(seccompProfile):
+                type: RuntimeDefault
+
+    - name: add-container-security-context
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      mutate:
+        foreach:
+          - list: "request.object.spec.containers"
+            patchStrategicMerge:
+              spec:
+                containers:
+                  - name: "{{ element.name }}"
+                    securityContext:
+                      +(allowPrivilegeEscalation): false
+                      +(readOnlyRootFilesystem): true
+                      +(capabilities):
+                        drop:
+                          - ALL
+
+---
+# Policy to add default resource requests/limits
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-default-resources
+  annotations:
+    policies.kyverno.io/title: Add Default Resource Requests and Limits
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy adds default resource requests and limits to containers that
+      don't have them defined. This ensures pods always have resource constraints.
+spec:
+  rules:
+    - name: add-default-resources
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      mutate:
+        foreach:
+          - list: "request.object.spec.containers"
+            patchStrategicMerge:
+              spec:
+                containers:
+                  - name: "{{ element.name }}"
+                    resources:
+                      requests:
+                        +(memory): "64Mi"
+                        +(cpu): "100m"
+                      limits:
+                        +(memory): "128Mi"
+                        +(cpu): "500m"
+
+---
+# Policy to add standard labels
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-default-labels
+  annotations:
+    policies.kyverno.io/title: Add Default Labels
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy adds default labels to Pods for better organization and tracking.
+      Labels like 'environment' and 'managed-by' are automatically added.
+spec:
+  rules:
+    - name: add-team-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+                - Deployment
+                - Service
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(policy-engine): "kyverno"
+              +(environment): "demo"
+
+---
+# Policy to add network policy label for automatic NetworkPolicy application
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-network-policy-label
+  annotations:
+    policies.kyverno.io/title: Add Network Policy Label
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy adds a label to enable network policy selection for Pods.
+spec:
+  rules:
+    - name: add-network-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(network-policy): "enabled"

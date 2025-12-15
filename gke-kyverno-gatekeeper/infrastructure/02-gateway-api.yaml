@@ -1,0 +1,97 @@
+# Gateway API Installation and Configuration for GKE Autopilot
+# This file sets up Gateway API resources for the demo
+
+# Note: GKE Autopilot clusters with version 1.24+ have Gateway API CRDs pre-installed
+# GatewayClasses (gke-l7-global-external-managed, gke-l7-rilb) are provided by GKE
+# Do not redefine them - they are managed by the GKE control plane
+
+---
+# Namespace for Gateway resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway-infra
+  labels:
+    app.kubernetes.io/name: gateway-infra
+    app.kubernetes.io/part-of: policy-demo
+
+---
+# Note: TLS secrets are created dynamically by the Makefile using:
+# kubectl create secret tls demo-tls-secret --cert=tls.crt --key=tls.key -n gateway-infra
+# This avoids malformed certificate warnings from static base64 values
+
+---
+# Google-managed SSL Certificate (alternative to self-signed)
+# Uncomment this for production use with a real domain
+# apiVersion: networking.gke.io/v1
+# kind: ManagedCertificate
+# metadata:
+#   name: demo-managed-cert
+#   namespace: gateway-infra
+# spec:
+#   domains:
+#     - demo.example.com
+#     - compliant-app.example.com
+#     - kyverno-demo.example.com
+#     - gatekeeper-demo.example.com
+
+---
+# Main Gateway for the demo
+# This creates an external HTTP(S) load balancer with TLS
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: demo-gateway
+  namespace: gateway-infra
+  labels:
+    app.kubernetes.io/name: demo-gateway
+    app.kubernetes.io/part-of: policy-demo
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+        kinds:
+          - kind: HTTPRoute
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: demo-tls-secret
+            namespace: gateway-infra
+      allowedRoutes:
+        namespaces:
+          from: All
+        kinds:
+          - kind: HTTPRoute
+
+---
+# ReferenceGrant to allow HTTPRoutes from other namespaces to reference this Gateway
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-all-namespaces
+  namespace: gateway-infra
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: apps
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: kyverno-demo
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: gatekeeper-demo
+  to:
+    - group: ""
+      kind: Service
+    - group: gateway.networking.k8s.io
+      kind: Gateway

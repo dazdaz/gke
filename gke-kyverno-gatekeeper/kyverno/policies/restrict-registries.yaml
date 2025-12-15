@@ -1,0 +1,148 @@
+# Kyverno Policy: Restrict Container Registries
+# This policy ensures containers only use images from allowed registries
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+  annotations:
+    policies.kyverno.io/title: Restrict Image Registries
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.6.0
+    policies.kyverno.io/description: >-
+      This policy restricts container images to only those from approved registries.
+      Images from unknown or untrusted registries may contain vulnerabilities or
+      malicious code. Only images from Google Container Registry (gcr.io),
+      Artifact Registry, Docker Hub official images, and other trusted sources are allowed.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-image-registries
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      validate:
+        message: >-
+          Images must be from approved registries. Allowed registries are:
+          - gcr.io/*
+          - us-docker.pkg.dev/*
+          - europe-docker.pkg.dev/*
+          - asia-docker.pkg.dev/*
+          - docker.io/library/* (official Docker Hub images)
+          - ghcr.io/*
+          - registry.k8s.io/*
+          - quay.io/*
+        pattern:
+          spec:
+            containers:
+              - image: "gcr.io/* | us-docker.pkg.dev/* | europe-docker.pkg.dev/* | asia-docker.pkg.dev/* | docker.io/library/* | ghcr.io/* | registry.k8s.io/* | quay.io/* | nginx* | busybox*"
+            =(initContainers):
+              - image: "gcr.io/* | us-docker.pkg.dev/* | europe-docker.pkg.dev/* | asia-docker.pkg.dev/* | docker.io/library/* | ghcr.io/* | registry.k8s.io/* | quay.io/* | nginx* | busybox*"
+            =(ephemeralContainers):
+              - image: "gcr.io/* | us-docker.pkg.dev/* | europe-docker.pkg.dev/* | asia-docker.pkg.dev/* | docker.io/library/* | ghcr.io/* | registry.k8s.io/* | quay.io/* | nginx* | busybox*"
+
+---
+# Policy to require image tags (no 'latest')
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow Latest Tag
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      The 'latest' tag is mutable and can lead to unexpected behavior.
+      This policy requires that container images specify a tag and that
+      the tag is not 'latest'.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      validate:
+        message: >-
+          An image tag is required. Images must not use the ':latest' tag.
+          Please specify a specific version tag (e.g., nginx:1.21.0).
+        pattern:
+          spec:
+            containers:
+              - image: "*:*"
+            =(initContainers):
+              - image: "*:*"
+            =(ephemeralContainers):
+              - image: "*:*"
+    
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      validate:
+        message: >-
+          Using the 'latest' tag is not allowed. Please specify a specific version tag.
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+            =(initContainers):
+              - image: "!*:latest"
+            =(ephemeralContainers):
+              - image: "!*:latest"
+
+---
+# Policy to require image digest for production
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: recommend-image-digest
+  annotations:
+    policies.kyverno.io/title: Recommend Image Digest
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Using image digests ensures immutability and reproducibility.
+      This policy audits containers that don't use image digests.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: recommend-digest
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "kyverno-demo"
+                - "apps"
+      validate:
+        message: >-
+          Consider using image digests instead of tags for better reproducibility.
+          Example: nginx@sha256:abc123...
+        pattern:
+          spec:
+            containers:
+              - image: "*@sha256:*"

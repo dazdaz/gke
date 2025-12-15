@@ -1,0 +1,174 @@
+# HTTPRoutes for Demo Applications
+# Routes traffic through the Gateway to backend services
+
+---
+# HTTPRoute for compliant app
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: compliant-app-route
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: compliant-app-route
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+spec:
+  parentRefs:
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: http
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: https
+  hostnames:
+    - "compliant-app.example.com"
+    - "compliant-app.apps.example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: compliant-app
+          port: 80
+          weight: 100
+
+---
+# HTTPRoute for health checks
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: health-route
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: health-route
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+spec:
+  parentRefs:
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: https
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /healthz
+        - path:
+            type: Exact
+            value: /ready
+      backendRefs:
+        - name: compliant-app
+          port: 80
+
+---
+# HTTPRoute with path-based routing
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-route
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: api-route
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+spec:
+  parentRefs:
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: http
+  hostnames:
+    - "api.apps.example.com"
+  rules:
+    # API v1 routes
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1
+          headers:
+            - name: X-API-Version
+              value: "1"
+      backendRefs:
+        - name: compliant-app
+          port: 80
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            add:
+              - name: X-Forwarded-Proto
+                value: https
+              - name: X-Policy-Engine
+                value: demo
+    
+    # Default API route
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: compliant-app
+          port: 80
+
+---
+# HTTPRoute with timeout and retry configuration
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: resilient-route
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: resilient-route
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+  annotations:
+    description: "Route with resilience configurations"
+spec:
+  parentRefs:
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: http
+    - name: demo-gateway
+      namespace: gateway-infra
+      sectionName: https
+  hostnames:
+    - "resilient.apps.example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: compliant-app
+          port: 80
+
+---
+# GKE-specific BackendPolicy for health checks
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: compliant-app-health
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: compliant-app-health
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: policy-demo
+spec:
+  default:
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080
+        requestPath: /healthz
+    checkIntervalSec: 15
+    timeoutSec: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+  targetRef:
+    group: ""
+    kind: Service
+    name: compliant-app
