@@ -21,7 +21,7 @@ This document provides an in-depth comparison of **Kyverno** and **Gatekeeper (O
 
 ## TL;DR
 
-| Aspect | Kyverno | OPA Gatekeeper |
+| Aspect | [Kyverno](https://kyverno.io/) | [OPA Gatekeeper](https://open-policy-agent.github.io/gatekeeper/) |
 |--------|---------|----------------|
 | **Popularity** | Rising fast due to simplicity | Mature, widely adopted |
 | **Policy Language** | YAML (Kubernetes native) | Rego (learning curve) |

@@ -38,7 +38,7 @@ help:
 	@echo ""
 	@echo "  Cleanup:"
 	@echo "    cleanup            - Remove demo resources (keeps cluster running)"
-	@echo "    full-cleanup       - Remove all resources including policy engines (keeps cluster)"
+	@echo "    full-cleanup       - Remove all resources AND delete the GKE cluster"
 	@echo ""
 
 # Variables
@@ -275,7 +275,7 @@ cleanup:
 	@echo "  (Namespaces and policy engines are preserved)"
 	@echo ""
 	@echo "  Next step: make full-cleanup"
-	@echo "      (to remove policy engines, or make deploy-app to redeploy)"
+	@echo "      (to remove policy engines and DELETE the cluster)"
 	@echo "──────────────────────────────────────────────────────────────────"
 
 # Full cleanup including policy engines and namespaces
@@ -304,11 +304,10 @@ full-cleanup: cleanup
 	-kubectl delete namespace kyverno-demo gatekeeper-demo apps gateway-infra --ignore-not-found --wait=false || true
 	@echo ""
 	@echo "──────────────────────────────────────────────────────────────────"
-	@echo "  ✓ Full cleanup complete!"
-	@echo ""
-	@echo "  Next step: make delete-cluster"
-	@echo "      (to delete GKE cluster, or make quick-start to start over)"
+	@echo "  ✓ In-cluster resources cleaned up!"
+	@echo "  Now deleting the cluster..."
 	@echo "──────────────────────────────────────────────────────────────────"
+	@$(MAKE) delete-cluster
 
 # Delete GKE cluster and network (DESTRUCTIVE)
 delete-cluster:
