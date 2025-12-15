@@ -284,48 +284,43 @@ spec:
 
 ## Feature Comparison
 
-```
- Feature                │ Kyverno                   │ OPA Gatekeeper
-────────────────────────┼───────────────────────────┼─────────────────────────────
- Policy Language        │ YAML                      │ Rego
- Learning Curve         │ Low                       │ High
- CNCF Status            │ Incubating                │ Graduated
- Management             │ DIY                       │ Managed (GKE/ACM available)
- Validation             │ ✅ Native                 │ ✅ Native
- Mutation               │ ✅ Native                 │ ⚠️ Limited (beta)
- Generation             │ ✅ Native                 │ ❌ Not supported
- Cleanup Policies       │ ✅ Native                 │ ❌ Not supported
- Policy Exceptions      │ ✅ Native                 │ ⚠️ excludedNamespaces only
- Audit Mode             │ ✅ Yes                    │ ✅ Yes
- Background Scanning    │ ✅ Yes                    │ ✅ Yes
- Image Verification     │ ✅ Built-in (Cosign)      │ ⚠️ Requires extension
- SLSA Support           │ ⚠️ Preview                │ ⚠️ Via Binary Authorization
- Policy Reports         │ ✅ Native CRDs            │ ⚠️ Via audit results
- Namespace Scope        │ ✅ ClusterPolicy & Policy │ ✅ Cluster-wide only
- External Data          │ ✅ ConfigMaps, APIs       │ ✅ OPA External Data
- CLI Tool               │ ✅ kyverno CLI            │ ✅ gator CLI
- Pod Security Standards │ ✅ Built-in               │ ⚠️ Library required
- Multi-platform         │ ❌ Kubernetes only        │ ✅ VMs, Cloud Run, etc.
- ArgoCD Integration     │ ⚠️ Known frictions        │ ✅ Works well
- OpenShift Support      │ ⚠️ Known frictions        │ ✅ Works well
-```
+| Feature | Kyverno | OPA Gatekeeper |
+|---------|---------|----------------|
+| Policy Language | YAML | Rego |
+| Learning Curve | Low | High |
+| CNCF Status | Incubating | Graduated |
+| Management | DIY | Managed (GKE/ACM available) |
+| Validation | ✅ Native | ✅ Native |
+| Mutation | ✅ Native | ⚠️ Limited (beta) |
+| Generation | ✅ Native | ❌ Not supported |
+| Cleanup Policies | ✅ Native | ❌ Not supported |
+| Policy Exceptions | ✅ Native | ⚠️ excludedNamespaces only |
+| Audit Mode | ✅ Yes | ✅ Yes |
+| Background Scanning | ✅ Yes | ✅ Yes |
+| Image Verification | ✅ Built-in (Cosign) | ⚠️ Requires extension |
+| SLSA Support | ⚠️ Preview | ⚠️ Via Binary Authorization |
+| Policy Reports | ✅ Native CRDs | ⚠️ Via audit results |
+| Namespace Scope | ✅ ClusterPolicy & Policy | ✅ Cluster-wide only |
+| External Data | ✅ ConfigMaps, APIs | ✅ OPA External Data |
+| CLI Tool | ✅ kyverno CLI | ✅ gator CLI |
+| Pod Security Standards | ✅ Built-in | ⚠️ Library required |
+| Multi-platform | ❌ Kubernetes only | ✅ VMs, Cloud Run, etc. |
+| ArgoCD Integration | ⚠️ Known frictions | ✅ Works well |
+| OpenShift Support | ⚠️ Known frictions | ✅ Works well |
 
 ### GKE Platform Compatibility
 
-```
-┌─────────────────────────────┬──────────────┬────────────────┬───────────────────────┐
-│ Platform                    │ Kyverno      │ OPA Gatekeeper │ Binary Authorization  │
-├─────────────────────────────┼──────────────┼────────────────┼───────────────────────┤
-│ GKE Standard                │ ✅ Supported │ ✅ Supported   │ ✅ Supported           │
-│ GKE Autopilot               │ ✅ Supported │ ✅ Supported   │ ✅ Supported           │
-│ Cloud Run                   │ ❌ No        │ ❌ No          │ ✅ Supported           │
-│ Anthos on-prem              │ ✅ Supported │ ✅ Managed*    │ ✅ Supported           │
-│ Anthos multi-cloud (AWS)    │ ✅ Supported │ ✅ Managed*    │ ⚠️ Limited             │
-│ Anthos multi-cloud (Azure)  │ ✅ Supported │ ✅ Managed*    │ ⚠️ Limited             │
-└─────────────────────────────┴──────────────┴────────────────┴───────────────────────┘
+| Platform | Kyverno | OPA Gatekeeper | Binary Authorization |
+|----------|---------|----------------|----------------------|
+| GKE Standard | ✅ Supported | ✅ Supported | ✅ Supported |
+| GKE Autopilot | ✅ Supported | ✅ Supported | ✅ Supported |
+| GKE Enterprise (Anthos) | ✅ Supported | ✅ Managed* | ✅ Supported |
+| Cloud Run | ❌ No | ❌ No | ✅ Supported |
+| Anthos on-prem | ✅ Supported | ✅ Managed* | ✅ Supported |
+| Anthos multi-cloud (AWS) | ✅ Supported | ✅ Managed* | ⚠️ Limited |
+| Anthos multi-cloud (Azure) | ✅ Supported | ✅ Managed* | ⚠️ Limited |
 
-* OPA Gatekeeper is available as "Policy Controller" - a managed service via ACM
-```
+*OPA Gatekeeper is available as "Policy Controller" - a managed service via ACM
 
 **GKE Autopilot Considerations:**
 
@@ -530,7 +525,7 @@ spec:
 ├─────────────────────────┼──────────────────────────────────────────────────────┤
 │ Binary Authorization    │ ✅ SLSA 1: Via Cloud Build provenance                │
 │                         │ ✅ SLSA 2: Via signed attestations                   │
-│                         │ ⚠️ SLSA 3: Via Cloud Build + custom attestors       │
+│                         │ ⚠️ SLSA 3: Via Cloud Build + custom attestors        │
 │                         │ • Integrates with Cloud Build provenance             │
 │                         │ • Uses Container Analysis for attestation storage    │
 │                         │ • Requires custom attestors for full SLSA 3          │
