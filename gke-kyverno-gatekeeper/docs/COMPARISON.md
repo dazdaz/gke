@@ -79,7 +79,7 @@ helm install kyverno kyverno/kyverno -n kyverno --create-namespace \
 - Highly flexible and expressive
 - Reusable across different platforms (Kubernetes, VMs, Cloud Run)
 - Strong in complex logic and data-driven policies
-- Available as a managed service on GKE/Anthos (ACM Policy Controller)
+- Available as a managed service on GKE/GDC (ACM Policy Controller)
 
 ---
 
@@ -314,11 +314,10 @@ spec:
 |----------|---------|----------------|----------------------|
 | GKE Standard | ✅ Supported | ✅ Supported | ✅ Supported |
 | GKE Autopilot | ✅ Supported | ✅ Supported | ✅ Supported |
-| GKE Enterprise (Anthos) | ✅ Supported | ✅ Managed* | ✅ Supported |
 | Cloud Run | ❌ No | ❌ No | ✅ Supported |
-| Anthos on-prem | ✅ Supported | ✅ Managed* | ✅ Supported |
-| Anthos multi-cloud (AWS) | ✅ Supported | ✅ Managed* | ⚠️ Limited |
-| Anthos multi-cloud (Azure) | ✅ Supported | ✅ Managed* | ⚠️ Limited |
+| GDC | ✅ Supported | ✅ Managed* | ✅ Supported |
+| GDC multi-cloud (AWS) | ✅ Supported | ✅ Managed* | ⚠️ Limited |
+| GDC multi-cloud (Azure) | ✅ Supported | ✅ Managed* | ⚠️ Limited |
 
 *OPA Gatekeeper is available as "Policy Controller" - a managed service via ACM
 
@@ -472,7 +471,7 @@ spec:
 | Feature | Binary Authorization | Kyverno + Cosign |
 |---------|---------------------|------------------|
 | **Type** | Managed service | DIY |
-| **Platform Support** | GKE, Anthos, Cloud Run | Kubernetes only |
+| **Platform Support** | GKE, GDC, Cloud Run | Kubernetes only |
 | **Attestation Storage** | Container Analysis API | Registry (OCI artifacts) |
 | **Key Management** | Cloud KMS | Multi-cloud (KMS, Vault, etc.) |
 | **Offline Validation** | ❌ Not possible | ✅ Supported |
@@ -826,7 +825,7 @@ spec:
    - Enterprise-wide policy consistency
 
 4. **You want a managed service**
-   - GKE/Anthos Config Management (ACM)
+   - GKE/GDC Config Management (ACM)
    - Policy Controller managed service
 
 5. **Performance is critical**
