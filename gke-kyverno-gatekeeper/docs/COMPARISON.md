@@ -316,13 +316,12 @@ spec:
 ┌─────────────────────────────┬──────────────┬────────────────┬───────────────────────┐
 │ Platform                    │ Kyverno      │ OPA Gatekeeper │ Binary Authorization  │
 ├─────────────────────────────┼──────────────┼────────────────┼───────────────────────┤
-│ GKE Standard                │ ✅ Supported │ ✅ Supported   │ ✅ Supported          │
-│ GKE Autopilot               │ ✅ Supported │ ✅ Supported   │ ✅ Supported          │
-│ GKE Enterprise (Anthos)     │ ✅ Supported │ ✅ Managed*    │ ✅ Supported          │
-│ Cloud Run                   │ ❌ No        │ ❌ No          │ ✅ Supported          │
-│ Anthos on-prem              │ ✅ Supported │ ✅ Managed*    │ ✅ Supported          │
-│ Anthos multi-cloud (AWS)    │ ✅ Supported │ ✅ Managed*    │ ⚠️ Limited            │
-│ Anthos multi-cloud (Azure)  │ ✅ Supported │ ✅ Managed*    │ ⚠️ Limited            │
+│ GKE Standard                │ ✅ Supported │ ✅ Supported   │ ✅ Supported           │
+│ GKE Autopilot               │ ✅ Supported │ ✅ Supported   │ ✅ Supported           │
+│ Cloud Run                   │ ❌ No        │ ❌ No          │ ✅ Supported           │
+│ Anthos on-prem              │ ✅ Supported │ ✅ Managed*    │ ✅ Supported           │
+│ Anthos multi-cloud (AWS)    │ ✅ Supported │ ✅ Managed*    │ ⚠️ Limited             │
+│ Anthos multi-cloud (Azure)  │ ✅ Supported │ ✅ Managed*    │ ⚠️ Limited             │
 └─────────────────────────────┴──────────────┴────────────────┴───────────────────────┘
 
 * OPA Gatekeeper is available as "Policy Controller" - a managed service via ACM
